@@ -14,7 +14,8 @@ namespace ccc {
 const std::vector<SymbolTableFormatInfo> SYMBOL_TABLE_FORMATS = {
 	{MDEBUG, "mdebug", ".mdebug"},
 	{SYMTAB, "symtab", ".symtab"},
-	{SNDLL, "sndll", ".sndata"}
+	{SNDLL, "sndll", ".sndata"},
+	{DWARF, "dwarf", ".debug"},
 };
 
 const SymbolTableFormatInfo* symbol_table_format_from_enum(SymbolTableFormat format)
@@ -56,6 +57,14 @@ Result<std::unique_ptr<SymbolTable>> create_elf_symbol_table(
 	switch(format) {
 		case MDEBUG: {
 			symbol_table = std::make_unique<MdebugSymbolTable>(elf.image, (s32) section.header.offset);
+			break;
+		}
+		case DWARF: {
+			CCC_CHECK(section.header.offset + section.header.size <= elf.image.size(),
+				"Section '%s' out of range.", section.name.c_str());
+			std::span<const u8> data = std::span(elf.image).subspan(section.header.offset, section.header.size);
+
+			symbol_table = std::make_unique<DwarfSymbolTable>(data);
 			break;
 		}
 		case SYMTAB: {
