@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "int128.h"
 #include "symbol_database.h"
 
 namespace ccc::ast {
@@ -97,14 +98,6 @@ struct Array : Node {
 	static const constexpr NodeDescriptor DESCRIPTOR = ARRAY;
 };
 
-struct BitField : Node {
-	s32 bitfield_offset_bits = -1; // Offset relative to the last byte (not the position of the underlying type!).
-	std::unique_ptr<Node> underlying_type;
-	
-	BitField() : Node(DESCRIPTOR) {}
-	static const constexpr NodeDescriptor DESCRIPTOR = BITFIELD;
-};
-
 enum class BuiltInClass {
 	VOID_TYPE,
 	UNSIGNED_8, SIGNED_8, UNQUALIFIED_8, BOOL_8,
@@ -112,6 +105,20 @@ enum class BuiltInClass {
 	UNSIGNED_32, SIGNED_32, FLOAT_32,
 	UNSIGNED_64, SIGNED_64, FLOAT_64,
 	UNSIGNED_128, SIGNED_128, UNQUALIFIED_128, FLOAT_128
+};
+
+struct BitField : Node {
+	s32 bitfield_offset_bits = -1;
+	std::unique_ptr<Node> underlying_type;
+	
+	BitField() : Node(DESCRIPTOR) {}
+	static const constexpr NodeDescriptor DESCRIPTOR = BITFIELD;
+	
+	BuiltInClass storage_unit_type(const SymbolDatabase& database) const;
+	u128 unpack_unsigned(u128 storage_unit) const;
+	s128 unpack_signed(u128 storage_unit) const;
+	u128 pack_unsigned(u128 bitfield) const;
+	u128 pack_signed(s128 bitfield) const;
 };
 
 struct BuiltIn : Node {
@@ -306,10 +313,10 @@ enum ExplorationMode {
 template <typename ThisNode, typename Callback>
 void for_each_node(ThisNode& node, TraversalOrder order, Callback callback)
 {
-	if(order == PREORDER_TRAVERSAL && callback(node) == DONT_EXPLORE_CHILDREN) {
+	if (order == PREORDER_TRAVERSAL && callback(node) == DONT_EXPLORE_CHILDREN) {
 		return;
 	}
-	switch(node.descriptor) {
+	switch (node.descriptor) {
 		case ARRAY: {
 			auto& array = node.template as<Array>();
 			for_each_node(*array.element_type.get(), order, callback);
@@ -331,11 +338,11 @@ void for_each_node(ThisNode& node, TraversalOrder order, Callback callback)
 		}
 		case FUNCTION: {
 			auto& func = node.template as<Function>();
-			if(func.return_type.has_value()) {
+			if (func.return_type.has_value()) {
 				for_each_node(*func.return_type->get(), order, callback);
 			}
-			if(func.parameters.has_value()) {
-				for(auto& child : *func.parameters) {
+			if (func.parameters.has_value()) {
+				for (auto& child : *func.parameters) {
 					for_each_node(*child.get(), order, callback);
 				}
 			}
@@ -354,13 +361,13 @@ void for_each_node(ThisNode& node, TraversalOrder order, Callback callback)
 		}
 		case STRUCT_OR_UNION: {
 			auto& struct_or_union = node.template as<StructOrUnion>();
-			for(auto& child : struct_or_union.base_classes) {
+			for (auto& child : struct_or_union.base_classes) {
 				for_each_node(*child.get(), order, callback);
 			}
-			for(auto& child : struct_or_union.fields) {
+			for (auto& child : struct_or_union.fields) {
 				for_each_node(*child.get(), order, callback);
 			}
-			for(auto& child : struct_or_union.member_functions) {
+			for (auto& child : struct_or_union.member_functions) {
 				for_each_node(*child.get(), order, callback);
 			}
 			break;
@@ -369,7 +376,7 @@ void for_each_node(ThisNode& node, TraversalOrder order, Callback callback)
 			break;
 		}
 	}
-	if(order == POSTORDER_TRAVERSAL) {
+	if (order == POSTORDER_TRAVERSAL) {
 		callback(node);
 	}
 }

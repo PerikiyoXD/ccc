@@ -216,6 +216,13 @@ class Symbol {
 	template <typename SymbolType>
 	friend class SymbolList;
 public:
+	Symbol();
+	Symbol(const Symbol& rhs) = delete;
+	Symbol(Symbol&& rhs);
+	~Symbol();
+	Symbol& operator=(const Symbol& rhs) = delete;
+	Symbol& operator=(Symbol&& rhs);
+	
 	const std::string& name() const { return m_name; }
 	RawSymbolHandle raw_handle() const { return m_handle; }
 	SymbolSourceHandle source() const { return m_source; }
@@ -635,10 +642,11 @@ public:
 	void clear();
 	
 	template <typename Callback>
-	void for_each_symbol(Callback callback) {
+	void for_each_symbol(Callback callback)
+	{
 		// Use indices here to avoid iterator invalidation.
 		#define CCC_X(SymbolType, symbol_list) \
-			for(s32 i = 0; i < symbol_list.size(); i++) { \
+			for (s32 i = 0; i < symbol_list.size(); i++) { \
 				callback(symbol_list.symbol_from_index(i)); \
 			}
 		CCC_FOR_EACH_SYMBOL_TYPE_DO_X
