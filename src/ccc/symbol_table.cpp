@@ -3,11 +3,13 @@
 
 #include "symbol_table.h"
 
+#include "dwarf_section.h"
 #include "elf.h"
 #include "elf_symtab.h"
 #include "mdebug_importer.h"
 #include "mdebug_section.h"
 #include "sndll.h"
+#include "util.h"
 
 namespace ccc {
 
@@ -59,14 +61,6 @@ Result<std::unique_ptr<SymbolTable>> create_elf_symbol_table(
 			symbol_table = std::make_unique<MdebugSymbolTable>(elf.image, (s32) section.header.offset);
 			break;
 		}
-		case DWARF: {
-			CCC_CHECK(section.header.offset + section.header.size <= elf.image.size(),
-				"Section '%s' out of range.", section.name.c_str());
-			std::span<const u8> data = std::span(elf.image).subspan(section.header.offset, section.header.size);
-
-			symbol_table = std::make_unique<DwarfSymbolTable>(data);
-			break;
-		}
 		case SYMTAB: {
 			CCC_CHECK(section.header.offset + section.header.size <= elf.image.size(),
 				"Section '%s' out of range.", section.name.c_str());
@@ -99,6 +93,19 @@ Result<std::unique_ptr<SymbolTable>> create_elf_symbol_table(
 			} else {
 				CCC_WARN("Invalid SNDLL section.");
 			}
+			
+			break;
+		}
+		case DWARF: {
+			auto debugSection = elf.lookup_section(".debug");
+			CCC_CHECK(debugSection != nullptr, "No .debug section found in ELF file.");
+			auto debugSectionSpan = std::span(elf.image).subspan(debugSection->header.offset, debugSection->header.size);
+
+			auto lineSection = elf.lookup_section(".line");
+			CCC_CHECK(lineSection != nullptr, "No .line section found in ELF file.");
+			auto lineSectionSpan = std::span(elf.image).subspan(lineSection->header.offset, lineSection->header.size);
+
+			symbol_table = std::make_unique<DwarfSymbolTable>(debugSectionSpan, lineSectionSpan);
 			
 			break;
 		}
@@ -289,4 +296,37 @@ Result<void> ElfSectionHeadersSymbolTable::print_symbols(FILE* out, u32 flags) c
 	return Result<void>();
 }
 
+// *****************************************************************************
+
+DwarfSymbolTable::DwarfSymbolTable(std::span<const u8> debug, std::span<const u8> line)
+	: m_debug(debug), m_line(line) {}
+
+const char* DwarfSymbolTable::name() const
+{
+	return "DWARF Symbol Table";
 }
+
+Result<void> DwarfSymbolTable::import(
+	SymbolDatabase& database,
+	const SymbolGroup& group,
+	u32 importer_flags,
+	DemanglerFunctions demangler,
+	const std::atomic_bool* interrupt) const
+{
+	auto _ = dwarf::SectionReader(m_debug, m_line).parse();
+	CCC_EXIT("DWARF symbol table import not fully implemented.");
+}
+
+Result<void> DwarfSymbolTable::print_headers(FILE* out) const
+{
+	// TODO: Implement
+	return Result<void>();
+}
+
+Result<void> DwarfSymbolTable::print_symbols(FILE* out, u32 flags) const
+{
+	// TODO: Implement
+	return Result<void>();
+}
+
+};

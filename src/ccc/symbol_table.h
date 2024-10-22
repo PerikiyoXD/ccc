@@ -99,26 +99,6 @@ protected:
 	s32 m_section_offset;
 };
 
-class DwarfSymbolTable : public SymbolTable {
-public:
-	DwarfSymbolTable(std::span<const u8> image);
-	
-	const char* name() const override;
-	
-	Result<void> import(
-		SymbolDatabase& database,
-		const SymbolGroup& group,
-		u32 importer_flags,
-		DemanglerFunctions demangler,
-		const std::atomic_bool* interrupt) const override;
-	
-	Result<void> print_headers(FILE* out) const override;
-	Result<void> print_symbols(FILE* out, u32 flags) const override;
-
-protected:
-	std::span<const u8> m_image;
-};
-
 class SymtabSymbolTable : public SymbolTable {
 public:
 	SymtabSymbolTable(std::span<const u8> symtab, std::span<const u8> strtab);
@@ -179,6 +159,27 @@ public:
 	Result<void> print_symbols(FILE* out, u32 flags) const override;
 protected:
 	const ElfFile& m_elf;
+};
+
+class DwarfSymbolTable : public SymbolTable {
+public:
+	DwarfSymbolTable(std::span<const u8> debug, std::span<const u8> line);
+
+	const char* name() const override;
+
+	Result<void> import(
+		SymbolDatabase& database,
+		const SymbolGroup& group,
+		u32 importer_flags,
+		DemanglerFunctions demangler,
+		const std::atomic_bool* interrupt) const override;
+
+	Result<void> print_headers(FILE* out) const override;
+	Result<void> print_symbols(FILE* out, u32 flags) const override;
+
+protected:
+	std::span<const u8> m_debug;
+	std::span<const u8> m_line;
 };
 
 }
