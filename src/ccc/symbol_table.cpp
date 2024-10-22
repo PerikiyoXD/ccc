@@ -313,8 +313,7 @@ Result<void> DwarfSymbolTable::import(
 	DemanglerFunctions demangler,
 	const std::atomic_bool* interrupt) const
 {
-	auto _ = dwarf::SectionReader(m_debug, m_line).parse();
-	CCC_EXIT("DWARF symbol table import not fully implemented.");
+	return dwarf::Dwarf(m_debug, m_line).parse();
 }
 
 Result<void> DwarfSymbolTable::print_headers(FILE* out) const

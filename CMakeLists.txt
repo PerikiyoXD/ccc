@@ -40,6 +40,10 @@ add_library(ccc STATIC
 	src/ccc/data_refinement.h
 	src/ccc/dwarf_section.cpp
 	src/ccc/dwarf_section.h
+	src/ccc/dwarf/info_entry.cpp
+	src/ccc/dwarf/info_entry.h
+	src/ccc/dwarf/attribute.cpp
+	src/ccc/dwarf/attribute.h
 	src/ccc/dependency.cpp
 	src/ccc/dependency.h
 	src/ccc/elf.cpp

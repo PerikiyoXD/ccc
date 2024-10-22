@@ -2,78 +2,61 @@
 // SPDX-License-Identifier: MIT
 
 #include "dwarf_section.h"
+#include "dwarf/info_entry.h"
 #include "util.h"
+#include <stdexcept>
 
 namespace ccc::dwarf {
 
-SectionReader::SectionReader(std::span<const u8> debug, std::span<const u8> line)
+Dwarf::Dwarf(std::span<const u8> debug, std::span<const u8> line)
     : m_debug(debug)
     , m_line(line)
 {
 }
 
-Result<void> SectionReader::parse()
+Result<void> Dwarf::parse()
 {
     u32 offset = 0;
+	std::vector<InfoEntry> dies;
 
-    DebuggingInformationEntry die;
-    CCC_RETURN_IF_ERROR(die.parse(m_debug, offset));
-    die.print(stdout, 0);
+	for(offset = 0; offset < m_debug.size(); ) {	
+		InfoEntry die;
+		CCC_RETURN_IF_ERROR(die.parse(m_debug, offset));
+		die.print(stdout, 0);
+
+		// It should've advanced the offset. Calculate if it's wrong
+		if(offset == die.get_offset()) {
+			return CCC_FAILURE("Offset did not advance.");
+		}
+	}
 
 	return Result<void>();
 }
 
-std::string Attribute::to_string() const
+
+
+void Attribute::print(FILE* out, u32 depth) const
 {
-	switch(this->form) {
-		case FORM_ADDR: return "FORM_ADDR";
-		case FORM_REF: return "FORM_REF";
-		case FORM_BLOCK2: return "FORM_BLOCK2";
-		case FORM_BLOCK4: return "FORM_BLOCK4";
-		case FORM_DATA2: return "FORM_DATA2";
-		case FORM_DATA4: return "FORM_DATA4";
-		case FORM_DATA8: return "FORM_DATA8";
-		case FORM_STRING: return "FORM_STRING";
-		default: return "unknown form";
-	}
-}
+	printf("Printing attribute\n");
 
-Result<void> DebuggingInformationEntry::parse(std::span<const u8> data, u32& offset)
-{
-    // Length reads the first u32
-    this->length = *reinterpret_cast<const u32*>(&data[offset]);
-    offset += sizeof(u32);
-
-    // Check if the length is 0
-    CCC_CHECK(this->length != 0, "DIE length is 0.");
-
-    // Tag reads the second u16
-    this->tag = static_cast<TagType>(*reinterpret_cast<const u16*>(&data[offset]));
-    offset += sizeof(u16);
-
-    // Print it.
-    this->print(stdout, 0);
-
-    return Result<void>();
-}
-
-void DebuggingInformationEntry::print(FILE* out, u32 depth)
-{
 	for(u32 i = 0; i < depth; i++) {
 		fprintf(out, "  ");
 	}
 
-	fprintf(out, "DIE: %s\n", tag_to_string(this->tag));
+	auto attribute_name_result = attribute_name_to_string(static_cast<AttributeName>(this->name));
+	fprintf(out, "Attribute: %s\n", attribute_name_result.success() ? *attribute_name_result : "unknown");
 	fprintf(out, "  offset: %u\n", this->offset);
 	fprintf(out, "  index: %u\n", this->index);
-	fprintf(out, "  length: %u\n", this->length);
-
-	for(const auto& [key, value] : this->attributes) {
-		fprintf(out, "  attribute[%u]: %s\n", key, value.to_string().c_str());
-	}
+	fprintf(out, "  size: %u\n", this->size);
+	auto attribute_form_result = attribute_form_to_string(this->form);
+	fprintf(out, "  form: %s\n", attribute_form_result.success() ? *attribute_form_result : "unknown");
 }
 
-const char* tag_to_string(TagType tag)
+
+
+
+
+const char* tag_to_string(InfoEntryTagType tag)
 {
 	switch(tag) {
 		case TAG_padding: return "padding";
