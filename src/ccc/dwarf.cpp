@@ -9,7 +9,9 @@ namespace ccc::dwarf {
 
 Result<const char*> attribute_form_to_string(AttributeForm form)
 {
-    switch (form) {
+    u8 form_type = form & 0xF;
+
+    switch (form_type) {
         case FORM_ADDR:    return "ADDR";
         case FORM_REF:     return "REF";
         case FORM_BLOCK2:  return "BLOCK2";
@@ -18,7 +20,7 @@ Result<const char*> attribute_form_to_string(AttributeForm form)
         case FORM_DATA4:   return "DATA4";
         case FORM_DATA8:   return "DATA8";
         case FORM_STRING:  return "STRING";
-        default:           return CCC_FAILURE("Unknown attribute form: 0x%X", form);
+        default:           return CCC_FAILURE("attribute_form_to_string: Unknown attribute form: 0x%X", form);
     }
 }
 
@@ -129,7 +131,7 @@ Result<const char*> attribute_name_to_string(AttributeName name)
         case AT_virtual:               return "virtual";
         case AT_lo_user:               return "lo_user";
         case AT_hi_user:               return "hi_user";
-        default:                       return CCC_FAILURE("Unknown attribute name: 0x%X", name);
+        default:                       return CCC_FAILURE("attribute_name_to_string: Unknown attribute name: 0x%X", name);
     }
 }
 
@@ -144,20 +146,8 @@ Result<Attribute> parse_attribute(std::span<const u8> data, u32& offset)
     attribute.name = static_cast<AttributeName>(*reinterpret_cast<const u16*>(&data[offset]));
     offset += sizeof(u16);
 
-	auto attribute_name_result = attribute_name_to_string(attribute.name);
-	if (!attribute_name_result.success()) {
-		return Result<Attribute>::failure(attribute_name_result.error());
-	}
-	printf("Attribute name: %s\n", *attribute_name_result);
-
     attribute.form = static_cast<AttributeForm>(*reinterpret_cast<const u16*>(&data[offset]));
     offset += sizeof(u16);
-
-	auto attribute_form_result = attribute_form_to_string(attribute.form);
-	if (!attribute_form_result.success()) {
-		return Result<Attribute>::failure(attribute_form_result.error());
-	}
-	printf("Attribute form: %s\n", *attribute_form_result);
 
     // Process based on form
     switch (attribute.form) {
@@ -193,34 +183,7 @@ Result<Attribute> parse_attribute(std::span<const u8> data, u32& offset)
     attribute.value = std::span<const u8>(&data[offset], attribute.size);
     offset += attribute.size;
 
-	auto attribute_value_result = [attribute]() -> Result<std::string> {
-        switch (attribute.form) {
-        case FORM_ADDR:
-            return "0x" + std::to_string(*reinterpret_cast<const u32*>(attribute.value.data()));
-        case FORM_REF:
-            return "0x" + std::to_string(*reinterpret_cast<const u32*>(attribute.value.data()));
-        case FORM_BLOCK2:
-            return "0x" + std::to_string(*reinterpret_cast<const u16*>(attribute.value.data()));
-        case FORM_BLOCK4:
-            return "0x" + std::to_string(*reinterpret_cast<const u32*>(attribute.value.data()));
-        case FORM_STRING:
-            return std::string(reinterpret_cast<const char*>(attribute.value.data()));
-        case FORM_DATA2:
-            return "0x" + std::to_string(*reinterpret_cast<const u16*>(attribute.value.data()));
-        case FORM_DATA4:
-            return "0x" + std::to_string(*reinterpret_cast<const u32*>(attribute.value.data()));
-        case FORM_DATA8:
-            return "0x" + std::to_string(*reinterpret_cast<const u64*>(attribute.value.data()));
-        default:
-            return CCC_FAILURE("Unknown attribute form: 0x%X", attribute.form);
-        }
-    }();
-	if (!attribute_value_result.success()) {
-		return CCC_FAILURE("Failed to convert attribute to string");
-	}
-	printf("Attribute value: %s\n", attribute_value_result->c_str());
-
-    printf("END\n");
+	auto attribute_result = attribute_value_to_string(attribute);
 
     return attribute;
 }
@@ -233,12 +196,16 @@ Result<std::string> attribute_to_string(Attribute attribute)
     auto form = attribute_form_to_string(attribute.form);
     CCC_RETURN_IF_ERROR(form);
 
+    auto value = attribute_value_to_string(attribute);
+    CCC_RETURN_IF_ERROR(value);
+
     std::string result;
     result += *name;
     result += " (";
     result += *form;
     result += "): ";
-
+    result += *value;
+    
     return result;
 }
 
