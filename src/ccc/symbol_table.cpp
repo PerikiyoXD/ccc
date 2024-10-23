@@ -3,12 +3,12 @@
 
 #include "symbol_table.h"
 
-#include "dwarf_section.h"
 #include "elf.h"
 #include "elf_symtab.h"
 #include "mdebug_importer.h"
 #include "mdebug_section.h"
 #include "sndll.h"
+#include "dwarf.h"
 #include "util.h"
 
 namespace ccc {
@@ -313,7 +313,7 @@ Result<void> DwarfSymbolTable::import(
 	DemanglerFunctions demangler,
 	const std::atomic_bool* interrupt) const
 {
-	return dwarf::Dwarf(m_debug, m_line).parse();
+	return ccc::dwarf::parse_debug_information(m_debug, m_line);
 }
 
 Result<void> DwarfSymbolTable::print_headers(FILE* out) const
