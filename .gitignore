@@ -1,2 +1,5 @@
 out/
 .vs/
+build/
+.vscode/
+.idea/
