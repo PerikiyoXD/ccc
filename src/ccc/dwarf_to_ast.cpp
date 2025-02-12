@@ -65,36 +65,9 @@ Result<std::unique_ptr<ast::Node>> TypeImporter::type_to_ast(const Type& type)
 		}
 		case AT_user_def_type:
 		case AT_mod_u_d_type: {
-			Result<u32> die_offset = type.user_def_type();
-			CCC_RETURN_IF_ERROR(die_offset);
-			
-			if(m_currently_importing_die[*die_offset]) {
-				auto error_node = std::make_unique<ast::Error>();
-				error_node->message = "TODO: Circular reference.";
-				return std::unique_ptr<ast::Node>(std::move(error_node));
-			}
-			
-			Result<std::optional<DIE>> referenced_die = m_dwarf.die_at(*die_offset);
-			CCC_RETURN_IF_ERROR(referenced_die);
-			CCC_CHECK(referenced_die->has_value(), "User-defined type is null.");
-			
-			Value name;
-			Result<void> attribute_result = (*referenced_die)->scan_attributes(
-				type_to_ast_attributes, {&name});
-			CCC_RETURN_IF_ERROR(attribute_result);
-			
-			ReferenceCounts& counts = m_die_reference_counts[*die_offset];
-			
-			if (name.valid() || counts.references_from_types != 1 || counts.references_not_from_types != 0) {
-				auto error_node = std::make_unique<ast::Error>();
-				error_node->message = "TODO: Type name.";
-				return std::unique_ptr<ast::Node>(std::move(error_node));
-			}
-			
-			Result<std::unique_ptr<ast::Node>> user_def_node = die_to_ast(**referenced_die);
-			CCC_RETURN_IF_ERROR(user_def_node);
-			node = std::move(*user_def_node);
-			
+			Result<std::unique_ptr<ast::Node>> result = user_defined_type_to_ast(type);
+			CCC_RETURN_IF_ERROR(result);
+			node = std::move(*result);
 			break;
 		}
 	}
@@ -178,6 +151,53 @@ Result<std::unique_ptr<ast::Node>> TypeImporter::fundamental_type_to_ast(Fundame
 	auto type_name = std::make_unique<ast::TypeName>();
 	type_name->data_type_handle = symbol_handle->second;
 	return std::unique_ptr<ast::Node>(std::move(type_name));
+}
+
+Result<std::unique_ptr<ast::Node>> TypeImporter::user_defined_type_to_ast(const Type& type) {
+	Result<u32> die_offset = type.user_def_type();
+	CCC_RETURN_IF_ERROR(die_offset);
+
+	if (m_currently_importing_die[*die_offset]) {
+		auto error_node = std::make_unique<ast::Error>();
+		error_node->message = "TODO: Circular reference.";
+		return std::unique_ptr<ast::Node>(std::move(error_node));
+	}
+
+	Result<std::optional<DIE>> referenced_die = m_dwarf.die_at(*die_offset);
+	CCC_RETURN_IF_ERROR(referenced_die);
+	CCC_CHECK(referenced_die->has_value(), "User-defined type is null.");
+
+	Value name;
+	Result<void> attribute_result = (*referenced_die)->scan_attributes(type_to_ast_attributes, {&name});
+	CCC_RETURN_IF_ERROR(attribute_result);
+
+	if (name.valid()) {
+		// Name is valid, so we can create a user-defined type.
+		auto data_type = m_database.data_types.symbol_from_handle(*die_offset);
+
+		// If the data type is not created, we create it now.
+		if (!data_type) {
+			Result<std::unique_ptr<ast::Node>> user_defined_type = die_to_ast(**referenced_die);
+			CCC_RETURN_IF_ERROR(user_defined_type);
+
+			auto data_type2 = m_database.data_types.create_symbol(name.string().data(), m_group.source, m_group.module_symbol);
+			CCC_RETURN_IF_ERROR(data_type2);
+
+			(*data_type2)->set_type(std::move(*user_defined_type));
+
+			data_type = *data_type2;
+		}
+
+		auto type_name = std::make_unique<ast::TypeName>();
+		type_name->name = name.string().data();
+		type_name->data_type_handle = (*data_type).handle();
+		return std::unique_ptr<ast::Node>(std::move(type_name));
+
+	} else {
+		auto error_node = std::make_unique<ast::Error>();
+		error_node->message = "TODO: Unnamed user-defined type.";
+		return std::unique_ptr<ast::Node>(std::move(error_node));
+	}
 }
 
 class DieLocker {
