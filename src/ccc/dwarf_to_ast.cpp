@@ -238,7 +238,9 @@ Result<std::unique_ptr<ast::Node>> TypeImporter::die_to_ast(const DIE& die)
 			break;
 		}
 		case TAG_structure_type: {
-			node = not_yet_implemented("TAG_structure_type");
+			Result<std::unique_ptr<ast::Node>> structure_type = structure_type_to_ast(die);
+			CCC_RETURN_IF_ERROR(structure_type);
+			node = std::move(*structure_type);
 			break;
 		}
 		case TAG_subroutine_type: {
@@ -338,6 +340,52 @@ Result<std::unique_ptr<ast::Node>> TypeImporter::class_type_to_ast(const DIE& di
 		struct_or_union->size_bytes = static_cast<s32>(byte_size.constant());
 	}
 	
+	Result<std::optional<DIE>> first_member = die.first_child();
+	CCC_RETURN_IF_ERROR(first_member);
+	
+	std::optional<DIE> member = *first_member;
+	while (member.has_value()) {
+		if (member->tag() == TAG_member) {
+			Result<std::unique_ptr<ast::Node>> field = type_attribute_to_ast(*member);
+			CCC_RETURN_IF_ERROR(field);
+			
+			Value member_name;
+			Result<void> member_attribute_result = member->scan_attributes(member_attributes, {&member_name});
+			CCC_RETURN_IF_ERROR(member_attribute_result);
+			
+			if (member_name.valid()) {
+				(*field)->name = member_name.string();
+			}
+			
+			struct_or_union->fields.emplace_back(std::move(*field));
+		}
+		
+		Result<std::optional<DIE>> next_member = member->sibling();
+		CCC_RETURN_IF_ERROR(next_member);
+		member = *next_member;
+	}
+	
+	return std::unique_ptr<ast::Node>(std::move(struct_or_union));
+}
+
+Result<std::unique_ptr<ast::Node>> TypeImporter::structure_type_to_ast(const DIE& die)
+{
+	Value name;
+	Value byte_size;
+	Result<void> attribute_result = die.scan_attributes(class_type_attributes, {&name, &byte_size});
+	CCC_RETURN_IF_ERROR(attribute_result);
+
+	auto struct_or_union = std::make_unique<ast::StructOrUnion>();
+	
+	if (name.valid()) {
+		struct_or_union->name = name.string();
+	}
+	
+	if (byte_size.valid()) {
+		struct_or_union->size_bytes = static_cast<s32>(byte_size.constant());
+	}
+	
+	// Parse the members of the structure
 	Result<std::optional<DIE>> first_member = die.first_child();
 	CCC_RETURN_IF_ERROR(first_member);
 	

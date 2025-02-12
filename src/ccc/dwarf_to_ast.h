@@ -25,6 +25,7 @@ public:
 protected:
 	Result<std::unique_ptr<ast::Node>> array_type_to_ast(const DIE& die);
 	Result<std::unique_ptr<ast::Node>> class_type_to_ast(const DIE& die);
+	Result<std::unique_ptr<ast::Node>> structure_type_to_ast(const DIE& die);
 	
 	SymbolDatabase& m_database;
 	const SectionReader& m_dwarf;
