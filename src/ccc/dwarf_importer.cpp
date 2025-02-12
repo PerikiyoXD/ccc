@@ -96,7 +96,7 @@ Result<void> SymbolTableImporter::import_compile_unit(const DIE& die)
 	
 	// The Metrowerks compiler outputs multiple compile_unit DIEs for a single
 	// logical source file, so we need to deduplicate them here.
-	if (!m_source_file || m_source_file->name() != name.string_or_null()) {
+	if (!m_source_file || (name.valid() && m_source_file->name() != name.string())) {
 		Result<SourceFile*> new_source_file = m_database.source_files.create_symbol(
 			std::string(name.string_or_null()), Address(), m_group.source, m_group.module_symbol);
 		CCC_RETURN_IF_ERROR(new_source_file);
