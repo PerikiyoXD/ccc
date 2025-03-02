@@ -102,13 +102,21 @@ int main(int argc, char** argv)
 	}
 	
 	// Write out all the source files.
-	for (auto& [relative_path, sources] : path_to_source_file) {
-		fs::path relative_header_path = relative_path;
+	for (auto& [original_relative_path, sources] : path_to_source_file) {
+		fs::path sanitized_path = original_relative_path;
+		sanitized_path = sanitized_path.lexically_normal();
+
+		// Remove the drive letter
+		if (sanitized_path.has_root_name()) {
+			sanitized_path = sanitized_path.relative_path();
+		}
+
+		fs::path relative_header_path = sanitized_path;
 		relative_header_path.replace_extension(".h");
-		
-		fs::path path = options.output_path/fs::path(relative_path);
-		fs::path header_path = options.output_path/relative_header_path;
-		
+
+		fs::path path = options.output_path / sanitized_path;
+		fs::path header_path = options.output_path / relative_header_path;
+
 		fs::create_directories(path.parent_path());
 		if (path.extension() == ".c" || path.extension() == ".cpp") {
 			// Write .c/.cpp file.
