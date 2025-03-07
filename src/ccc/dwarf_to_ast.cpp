@@ -112,42 +112,59 @@ Result<std::unique_ptr<ast::Node>> TypeImporter::type_to_ast(const Type& type)
 Result<std::unique_ptr<ast::Node>> TypeImporter::fundamental_type_to_ast(FundamentalType fund_type)
 {
 	std::optional<ast::BuiltInClass> bclass = fundamental_type_to_builtin_class(fund_type);
+
+	// Handle pointer type early
+	if (!bclass.has_value() && fund_type == FT_pointer) {
+		Result<std::unique_ptr<ast::Node>> value_type = fundamental_type_to_ast(FT_void);
+		CCC_RETURN_IF_ERROR(value_type);
+
+		auto pointer = std::make_unique<ast::PointerOrReference>();
+		pointer->is_pointer = true;
+		pointer->value_type = std::move(*value_type);
+		pointer->size_bytes = 4;
+		return std::unique_ptr<ast::Node>(std::move(pointer));
+	}
+
+	// Handle unknown types early
 	if (!bclass.has_value()) {
-		if (fund_type == FT_pointer) {
-			Result<std::unique_ptr<ast::Node>> value_type = fundamental_type_to_ast(FT_void);
-			CCC_RETURN_IF_ERROR(value_type);
-			
-			auto pointer = std::make_unique<ast::PointerOrReference>();
-			pointer->is_pointer = true;
-			pointer->value_type = std::move(*value_type);
-			pointer->size_bytes = 4;
-			return std::unique_ptr<ast::Node>(std::move(pointer));
-		} else {
-			return CCC_FAILURE("Unhandled fundamental type %s.", fundamental_type_to_string(fund_type));
-		}
+		return CCC_FAILURE("Unhandled fundamental type %s.", fundamental_type_to_string(fund_type));
 	}
-	
+
+	// Lookup in cache
 	auto symbol_handle = m_fundamental_types.find(fund_type);
-	if (symbol_handle == m_fundamental_types.end()) {
-		std::string name;
-		
-		const char* string = fundamental_type_to_pretty_string(fund_type);
-		if (string) {
-			name = string;
-		}
-		
-		Result<DataType*> data_type = m_database.data_types.create_symbol(
-			std::move(name), m_group.source, m_group.module_symbol);
-		CCC_RETURN_IF_ERROR(data_type);
-		
-		auto built_in = std::make_unique<ast::BuiltIn>();
-		built_in->bclass = *bclass;
-		built_in->size_bytes = ast::builtin_class_size(built_in->bclass);
-		(*data_type)->set_type(std::move(built_in));
-		
-		symbol_handle = m_fundamental_types.emplace(fund_type, (*data_type)->handle()).first;
+	if (symbol_handle != m_fundamental_types.end()) {
+		auto type_name = std::make_unique<ast::TypeName>();
+		type_name->data_type_handle = symbol_handle->second;
+		return std::unique_ptr<ast::Node>(std::move(type_name));
 	}
-	
+
+	// Resolve name
+	std::string name;
+	if (const char* string = fundamental_type_to_pretty_string(fund_type)) {
+		name = string;
+	}
+
+	// Check if already exists in database
+	auto existing_data_type = m_database.data_types.first_handle_from_name(name);
+	if (existing_data_type.valid()) {
+		symbol_handle = m_fundamental_types.emplace(fund_type, existing_data_type).first;
+		auto type_name = std::make_unique<ast::TypeName>();
+		type_name->data_type_handle = symbol_handle->second;
+		return std::unique_ptr<ast::Node>(std::move(type_name));
+	}
+
+	// Create new data type
+	Result<DataType*> data_type = m_database.data_types.create_symbol(
+		std::move(name), m_group.source, m_group.module_symbol);
+	CCC_RETURN_IF_ERROR(data_type);
+
+	auto built_in = std::make_unique<ast::BuiltIn>();
+	built_in->bclass = *bclass;
+	built_in->size_bytes = ast::builtin_class_size(built_in->bclass);
+	(*data_type)->set_type(std::move(built_in));
+
+	symbol_handle = m_fundamental_types.emplace(fund_type, (*data_type)->handle()).first;
+
 	auto type_name = std::make_unique<ast::TypeName>();
 	type_name->data_type_handle = symbol_handle->second;
 	return std::unique_ptr<ast::Node>(std::move(type_name));
